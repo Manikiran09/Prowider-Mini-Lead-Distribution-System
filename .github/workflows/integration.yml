@@ -1,0 +1,39 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start MongoDB (replica set)
+        run: |
+          docker run -d --name prowider-mongo -p 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          sleep 5
+          docker exec prowider-mongo mongosh --eval 'rs.initiate()'
+          sleep 5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Seed database
+        env:
+          MONGODB_URI: 'mongodb://localhost:27017/prowider_ci'
+        run: npm run db:seed
+
+      - name: Run integration tests
+        env:
+          MONGODB_URI: 'mongodb://localhost:27017/prowider_ci'
+        run: node test/integration-test.js
